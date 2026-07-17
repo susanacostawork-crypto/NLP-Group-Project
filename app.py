@@ -86,10 +86,19 @@ def fetch_reviews_live(restaurant_query, serpapi_key, max_pages_per_sort=3):
 
     place_params = {"engine": "google_maps", "q": restaurant_query, "api_key": serpapi_key}
     place_result = GoogleSearch(place_params).get_dict()
+
+    # SerpApi returns "place_results" for an unambiguous single match,
+    # but "local_results" (a list) when there are several candidates.
     place = place_result.get("place_results")
     if not place:
+        local_results = place_result.get("local_results")
+        if local_results:
+            place = local_results[0]  # take the top match
+    if not place:
         return None, None
-    data_id = place["data_id"]
+    data_id = place.get("data_id") or place.get("place_id")
+    if not data_id:
+        return None, None
     place_name = place.get("title", restaurant_query)
 
     def fetch(sort_by=None, max_pages=max_pages_per_sort):
