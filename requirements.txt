@@ -1,9 +1,8 @@
 streamlit
 pandas
 plotly
-transformers==4.44.2
-tokenizers==0.19.1
-sentencepiece
+transformers
 torch
+sentencepiece
 google-search-results
 groq
