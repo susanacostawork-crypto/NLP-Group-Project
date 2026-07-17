@@ -50,10 +50,10 @@ def compute_aspect_summary(df):
 @st.cache_resource(show_spinner=False)
 def load_sentiment_model():
     from transformers import pipeline, AutoTokenizer
-    model_name = "cardiffnlp/twitter-xlm-roberta-base-sentiment"
-    # use_fast=False avoids needing the Rust-based "tokenizers" package to build from
-    # source (which fails on very new Python versions) — falls back to the pure-Python
-    # slow tokenizer, which only needs sentencepiece.
+    # nlptown's model is trained on real multilingual REVIEWS (Amazon, Yelp, etc.),
+    # unlike the earlier Twitter-trained model — handles long-form review text,
+    # negation, and understatement much better.
+    model_name = "nlptown/bert-base-multilingual-uncased-sentiment"
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
     return pipeline(
         "sentiment-analysis",
@@ -62,6 +62,16 @@ def load_sentiment_model():
         truncation=True,
         max_length=512,
     )
+
+def map_star_label_to_sentiment(label):
+    # nlptown outputs labels like "1 star", "2 stars", ..., "5 stars"
+    stars = int(label[0])
+    if stars <= 2:
+        return "negative"
+    elif stars == 3:
+        return "neutral"
+    else:
+        return "positive"
 
 # ──────────────────────────────────────────────────────────────────────────
 # PRECOMPUTED DATA LOADER (Majestic Café case study)
@@ -165,7 +175,7 @@ def run_live_pipeline(restaurant_query, serpapi_key, groq_key, max_pages_per_sor
 
     sentiment_model = load_sentiment_model()
     results = sentiment_model(df["review_text_clean"].tolist(), batch_size=16)
-    df["sentiment_label"] = [r["label"] for r in results]
+    df["sentiment_label"] = [map_star_label_to_sentiment(r["label"]) for r in results]
     df["sentiment_score"] = [r["score"] for r in results]
     df["aspects_mentioned"] = df["review_text_clean"].apply(extract_aspects)
 
