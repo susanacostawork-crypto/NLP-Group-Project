@@ -49,10 +49,16 @@ def compute_aspect_summary(df):
 # ──────────────────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
 def load_sentiment_model():
-    from transformers import pipeline
+    from transformers import pipeline, AutoTokenizer
+    model_name = "cardiffnlp/twitter-xlm-roberta-base-sentiment"
+    # use_fast=False avoids needing the Rust-based "tokenizers" package to build from
+    # source (which fails on very new Python versions) — falls back to the pure-Python
+    # slow tokenizer, which only needs sentencepiece.
+    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
     return pipeline(
         "sentiment-analysis",
-        model="cardiffnlp/twitter-xlm-roberta-base-sentiment",
+        model=model_name,
+        tokenizer=tokenizer,
         truncation=True,
         max_length=512,
     )
