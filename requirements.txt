@@ -1,0 +1,7 @@
+streamlit
+pandas
+plotly
+transformers
+torch
+google-search-results
+groq
