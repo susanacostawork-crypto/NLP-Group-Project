@@ -280,10 +280,26 @@ if mode == "Majestic Café (Porto) — case study":
     render_dashboard(df, aspect_summary, summary_text, "Majestic Café, Porto")
 
 else:
+    # Default to the app owner's keys stored in Streamlit Cloud "Secrets"
+    # (Settings > Secrets, as TOML: SERPAPI_KEY = "..." / GROQ_KEY = "...")
+    # so anyone using the deployed app (e.g. a professor grading it) doesn't need their own keys.
+    default_serpapi_key = st.secrets.get("SERPAPI_KEY", "")
+    default_groq_key = st.secrets.get("GROQ_KEY", "")
+
     st.sidebar.markdown("### API Keys")
-    st.sidebar.caption("Keys are only used for this session — never stored or logged.")
-    serpapi_key = st.sidebar.text_input("SerpApi key", type="password")
-    groq_key = st.sidebar.text_input("Groq key", type="password")
+    if default_serpapi_key and default_groq_key:
+        st.sidebar.caption("Using the app owner's API keys by default. You can optionally use your own below.")
+    else:
+        st.sidebar.caption("Keys are only used for this session — never stored or logged.")
+
+    use_own_keys = st.sidebar.checkbox("Use my own API keys instead", value=not (default_serpapi_key and default_groq_key))
+    if use_own_keys:
+        serpapi_key = st.sidebar.text_input("SerpApi key", type="password")
+        groq_key = st.sidebar.text_input("Groq key", type="password")
+    else:
+        serpapi_key = default_serpapi_key
+        groq_key = default_groq_key
+
     restaurant_query = st.text_input("Restaurant name (add city for best results)", placeholder="e.g. Cervejaria Gazela, Porto")
 
     if st.button("Analyze", type="primary"):
