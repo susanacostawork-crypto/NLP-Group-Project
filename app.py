@@ -81,7 +81,7 @@ def load_precomputed():
 # ──────────────────────────────────────────────────────────────────────────
 # LIVE PIPELINE (any restaurant, run on demand)
 # ──────────────────────────────────────────────────────────────────────────
-def fetch_reviews_live(restaurant_query, serpapi_key, max_pages_per_sort=3):
+def fetch_reviews_live(restaurant_query, serpapi_key, max_pages_per_sort=5):
     from serpapi import GoogleSearch
 
     place_params = {"engine": "google_maps", "q": restaurant_query, "api_key": serpapi_key}
@@ -154,8 +154,8 @@ def clean_and_prepare(raw_df):
     df["review_text_clean"] = df["review_text"].apply(clean_text)
     return df
 
-def run_live_pipeline(restaurant_query, serpapi_key, groq_key):
-    raw_df, place_name = fetch_reviews_live(restaurant_query, serpapi_key)
+def run_live_pipeline(restaurant_query, serpapi_key, groq_key, max_pages_per_sort=5):
+    raw_df, place_name = fetch_reviews_live(restaurant_query, serpapi_key, max_pages_per_sort=max_pages_per_sort)
     if raw_df is None:
         return None
 
@@ -260,11 +260,17 @@ def render_dashboard(df, aspect_summary, summary_text, title):
             df_time = df.copy()
             df_time["date"] = pd.to_datetime(df_time["iso_date"], errors="coerce")
             df_time = df_time.dropna(subset=["date"])
-            df_time["year"] = df_time["date"].dt.year
+            df_time["year"] = df_time["date"].dt.year.astype(str)  # categorical, avoids "2,024.5" ticks
             trend = df_time.groupby(["year", "sentiment_label"]).size().reset_index(name="count")
-            fig3 = px.line(trend, x="year", y="count", color="sentiment_label", markers=True,
-                           color_discrete_map={"positive": "#2ecc71", "negative": "#e74c3c", "neutral": "#95a5a6"})
-            st.plotly_chart(fig3, use_container_width=True)
+            trend = trend.sort_values("year")
+            if trend["year"].nunique() >= 2:
+                fig3 = px.line(trend, x="year", y="count", color="sentiment_label", markers=True,
+                               category_orders={"year": sorted(trend["year"].unique())},
+                               color_discrete_map={"positive": "#2ecc71", "negative": "#e74c3c", "neutral": "#95a5a6"})
+                fig3.update_xaxes(type="category")
+                st.plotly_chart(fig3, use_container_width=True)
+            else:
+                st.caption("Not enough distinct years in this sample to show a trend.")
         except Exception:
             pass
 
@@ -316,6 +322,8 @@ else:
         groq_key = default_groq_key
 
     restaurant_query = st.text_input("Restaurant name (add city for best results)", placeholder="e.g. Cervejaria Gazela, Porto")
+    deep_analysis = st.checkbox("Deep analysis (more reviews, slower)", value=False)
+    max_pages = 8 if deep_analysis else 5
 
     if st.button("Analyze", type="primary"):
         if not serpapi_key or not groq_key:
@@ -323,9 +331,9 @@ else:
         elif not restaurant_query:
             st.error("Please enter a restaurant name.")
         else:
-            with st.spinner(f"Fetching and analyzing reviews for '{restaurant_query}'... this can take 30-60 seconds."):
+            with st.spinner(f"Fetching and analyzing reviews for '{restaurant_query}'... this can take 30-90 seconds."):
                 try:
-                    result = run_live_pipeline(restaurant_query, serpapi_key, groq_key)
+                    result = run_live_pipeline(restaurant_query, serpapi_key, groq_key, max_pages_per_sort=max_pages)
                 except Exception as e:
                     st.error(f"Something went wrong: {e}")
                     result = None
@@ -333,4 +341,11 @@ else:
             if result is None:
                 st.error("Couldn't find that restaurant or no reviews were returned. Try a more specific name (add the city).")
             else:
-                render_dashboard(result["df"], result["aspect_summary"], result["summary_text"], result["place_name"])
+                # Store in session_state so it survives reruns triggered by filter widgets below
+                st.session_state["live_result"] = result
+
+    # Render from session_state (not just right after the button click) so that
+    # interacting with filters inside render_dashboard doesn't lose the analysis
+    if "live_result" in st.session_state:
+        result = st.session_state["live_result"]
+        render_dashboard(result["df"], result["aspect_summary"], result["summary_text"], result["place_name"])
