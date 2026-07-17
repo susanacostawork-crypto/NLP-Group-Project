@@ -3,5 +3,6 @@ pandas
 plotly
 transformers
 torch
+tiktoken
 google-search-results
 groq
